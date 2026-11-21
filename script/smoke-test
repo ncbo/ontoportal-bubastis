@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Runs bubastis on two tiny ontologies and checks the XML report. Bubastis
+# exits 0 even when a diff fails, so the report is what's checked.
+#
+# Usage: script/smoke-test [path/to/bubastis.jar]
+# With no argument it uses Ontoportal::Bubastis.jar_path from the installed
+# gem, and fails if that resolves to a jar inside this checkout.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+dir="$root/test/smoke"
+
+if [[ $# -gt 0 ]]; then
+  jar=$1
+else
+  # Run from outside the checkout so only the installed gem can answer.
+  jar=$(cd / && ruby -e 'require "ontoportal/bubastis"; print Ontoportal::Bubastis.jar_path')
+  version=$(cd / && ruby -e 'require "ontoportal/bubastis"; print Ontoportal::Bubastis.jar_version')
+  case "$jar" in
+    "$root"/*) echo "FAIL: jar_path points into the checkout ($jar), not the installed gem"; exit 1 ;;
+  esac
+  expected=$(tr -d '[:space:]' < "$root/BUBASTIS_VERSION")
+  [[ "$version" == "$expected" ]] \
+    || { echo "FAIL: jar_version is $version, expected $expected"; exit 1; }
+  echo "Installed gem jar_path: $jar (jar_version $version)"
+fi
+test -f "$jar" || { echo "FAIL: $jar does not exist"; exit 1; }
+
+out=$(mktemp -d)
+trap 'rm -rf "$out"' EXIT
+
+java -jar "$jar" -ontology1 "$dir/v1.owl" -ontology2 "$dir/v2.owl" \
+  -output "$out/diff.xml" -format xml
+test -s "$out/diff.xml" || { echo "FAIL: no report written"; exit 1; }
+tr -d '[:space:]' < "$out/diff.xml" | grep -q '<numberNewClasses>1</numberNewClasses>' \
+  || { echo "FAIL: expected 1 new class"; cat "$out/diff.xml"; exit 1; }
+grep -q 'http://example.org/smoke#Dog' "$out/diff.xml" \
+  || { echo "FAIL: new class Dog not reported"; cat "$out/diff.xml"; exit 1; }
+echo "OK: $jar reports the new class"

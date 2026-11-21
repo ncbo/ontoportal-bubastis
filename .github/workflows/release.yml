@@ -1,0 +1,75 @@
+name: Release
+
+# Publishing a GitHub release tagged vX.Y.Z (or vX.Y.Z.N for a packaging-only
+# fix) builds ontoportal-bubastis at that version around the jar named by
+# BUBASTIS_VERSION, smoke-tests it, attaches it to the release and pushes it
+# to RubyGems.
+#
+# RubyGems uses trusted publishing (OIDC), so no API key is stored here.
+# Before the first release, a rubygems.org owner must add a pending trusted
+# publisher for gem ontoportal-bubastis, repository ncbo/ontoportal-bubastis,
+# workflow release.yml, environment rubygems. See README.md.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: rubygems
+    permissions:
+      contents: write   # attach the gem to the release
+      id-token: write   # RubyGems trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version from tag
+        id: vars
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Invalid tag format: $TAG_NAME (expected vX.Y.Z or vX.Y.Z.N)"
+            exit 1
+          fi
+          echo "version=${TAG_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Download and verify the jar
+        run: rake jar:fetch
+
+      # The gemspec refuses a GEM_VERSION that does not start with the jar
+      # version in BUBASTIS_VERSION.
+      - name: Build the gem
+        env:
+          GEM_VERSION: ${{ steps.vars.outputs.version }}
+        run: gem build ontoportal-bubastis.gemspec
+
+      - name: Install and smoke test the gem
+        run: |
+          gem install --local ./ontoportal-bubastis-${{ steps.vars.outputs.version }}.gem
+          script/smoke-test
+
+      - name: Attach the gem to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ontoportal-bubastis-${{ steps.vars.outputs.version }}.gem
+
+      - name: Configure RubyGems credentials
+        uses: rubygems/configure-rubygems-credentials@v1.0.0
+
+      - name: Push the gem to RubyGems
+        run: gem push ontoportal-bubastis-${{ steps.vars.outputs.version }}.gem
