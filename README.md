@@ -89,6 +89,9 @@ https://rubygems.org/profile/oidc/pending_trusted_publishers/new) with:
 | Workflow filename | `release.yml` |
 | Environment | `rubygems` |
 
+A pending publisher expires 12 hours after it is created, so add it right
+before publishing the first release, not in advance.
+
 The repository also needs a GitHub environment named `rubygems` (Settings →
 Environments); add required reviewers there to gate pushes. After the first
 push the pending publisher becomes a normal trusted publisher on the gem.
