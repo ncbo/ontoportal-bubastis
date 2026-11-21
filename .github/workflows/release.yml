@@ -24,7 +24,7 @@ jobs:
       contents: write   # attach the gem to the release
       id-token: write   # RubyGems trusted publishing
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Version from tag
         id: vars
@@ -38,7 +38,7 @@ jobs:
           echo "version=${TAG_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 11
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           java-version: '11'
           distribution: 'temurin'
@@ -64,12 +64,12 @@ jobs:
           script/smoke-test
 
       - name: Attach the gem to the release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ontoportal-bubastis-${{ steps.vars.outputs.version }}.gem
 
       - name: Configure RubyGems credentials
-        uses: rubygems/configure-rubygems-credentials@v1.0.0
+        uses: rubygems/configure-rubygems-credentials@v2.1.0
 
       - name: Push the gem to RubyGems
         run: gem push ontoportal-bubastis-${{ steps.vars.outputs.version }}.gem
